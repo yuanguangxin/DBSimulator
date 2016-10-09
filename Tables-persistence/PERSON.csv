@@ -1,0 +1,4 @@
+length,name,notNull,primaryKey,type
+0,id,false,false,int
+255,name,false,false,varchar
+30,age,false,false,varchar
