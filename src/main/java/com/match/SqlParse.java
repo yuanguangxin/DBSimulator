@@ -32,7 +32,11 @@ public class SqlParse {
                 sqlTranslate.getTableDataByUpdate(sqlString);
                 break;
             case "create":
-                sqlTranslate.getTableByCreateTable(sqlString);
+                if (afterArray[1].toLowerCase().equals("table")) {
+                    sqlTranslate.getTableByCreateTable(sqlString);
+                } else if (afterArray[1].toLowerCase().equals("index")) {
+                    sqlTranslate.executeCreateIndex(sqlString,true);
+                }
                 break;
             case "delete":
                 sqlTranslate.getTableDataByDelete(sqlString);
@@ -46,7 +50,7 @@ public class SqlParse {
             case "desc":
                 break;
             case "drop":
-                sqlTranslate.dropTable(sqlString);
+                sqlTranslate.drop(sqlString);
                 break;
             case "source":
                 break;

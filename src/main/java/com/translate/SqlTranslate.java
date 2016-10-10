@@ -1,11 +1,11 @@
 package com.translate;
 
-import com.models.Column;
-import com.models.ResultView;
-import com.models.Table;
-import com.models.TableData;
+import com.match.SqlParse;
+import com.models.*;
 import com.persistence.DataPersistence;
+import com.persistence.IndexPersistence;
 import com.persistence.TablePersistence;
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import com.util.DBError;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.BinaryExpression;
@@ -15,6 +15,7 @@ import net.sf.jsqlparser.expression.operators.relational.*;
 import net.sf.jsqlparser.parser.CCJSqlParserManager;
 import net.sf.jsqlparser.statement.alter.Alter;
 import net.sf.jsqlparser.statement.alter.AlterExpression;
+import net.sf.jsqlparser.statement.create.index.CreateIndex;
 import net.sf.jsqlparser.statement.create.table.CreateTable;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -97,11 +98,12 @@ public class SqlTranslate {
             row.add(expressionList.getExpressions().get(i).toString());
         }
         try {
-            tableData.insertRow(insert.getColumns(), row,-1);
+            tableData.insertRow(insert.getColumns(), row, -1);
         } catch (DBError dbError) {
             dbError.printStackTrace();
         }
         DataPersistence.insertData(tableData);
+        IndexPersistence.updateIndex(tableData.getTable().getName());
         return tableData;
     }
 
@@ -270,6 +272,7 @@ public class SqlTranslate {
             tableData.getRows().remove(Integer.parseInt(result.get(i).toString()));
         }
         DataPersistence.persistenceData(tableData);
+        IndexPersistence.updateIndex(tableData.getTable().getName());
         return tableData;
     }
 
@@ -287,11 +290,11 @@ public class SqlTranslate {
         }
         TableData tableData = TableData.getDataByName(update.getTables().get(0).getName());
         List<Integer> result = new ArrayList<>();
-        if(update.getWhere()==null){
-            for (int i = 0;i<tableData.getColCount();i++){
+        if (update.getWhere() == null) {
+            for (int i = 0; i < tableData.getRows().size(); i++) {
                 result.add(i);
             }
-        }else {
+        } else {
             result = doExpression(tableData, update.getWhere());
         }
         List<String> cols = new ArrayList<>();
@@ -308,13 +311,14 @@ public class SqlTranslate {
             }
             tableData.getRows().remove(Integer.parseInt(result.get(i).toString()));
             try {
-                tableData.insertRow(update.getColumns(), new ArrayList<>(list),Integer.parseInt(result.get(i).toString()));
+                tableData.insertRow(update.getColumns(), new ArrayList<>(list), Integer.parseInt(result.get(i).toString()));
             } catch (DBError dbError) {
                 dbError.printStackTrace();
                 return null;
             }
         }
         DataPersistence.persistenceData(tableData);
+        IndexPersistence.updateIndex(tableData.getTable().getName());
         return tableData;
     }
 
@@ -438,11 +442,11 @@ public class SqlTranslate {
                 }
             } else {
                 column.setLength(Integer.parseInt(ae.getColDataTypeList().get(0).getColDataType().getArgumentsStringList().get(0)));
-                if(ae.getColDataTypeList().get(0).getColDataType().getDataType().toLowerCase().equals("int")){
+                if (ae.getColDataTypeList().get(0).getColDataType().getDataType().toLowerCase().equals("int")) {
                     for (int i = 0; i < lists.size(); i++) {
                         lists.get(i).add(String.valueOf(0));
                     }
-                }else {
+                } else {
                     for (int i = 0; i < lists.size(); i++) {
                         lists.get(i).add("");
                     }
@@ -491,19 +495,95 @@ public class SqlTranslate {
         return index;
     }
 
-    public void dropTable(String dropSql) {
+    public void drop(String dropSql) {
         CCJSqlParserManager pm = new CCJSqlParserManager();
         Drop drop;
         try {
             drop = (Drop) pm.parse(new StringReader(dropSql));
         } catch (JSQLParserException e) {
+            String[] divs = dropSql.split(" ");
+            String indexName = divs[2];
+            String tableName = divs[4];
+            String fileName = tableName + "-" + indexName;
+            IndexPersistence.dropIndex(fileName);
+            return;
+        }
+        if (drop.getType().equals("table")) {
+            TablePersistence.dropTable(drop.getName().getName());
+        } else {
+            System.out.println(drop.getParameters());
+        }
+    }
+
+    public void executeCreateIndex(String createIndexSql, Boolean bool) {
+        CCJSqlParserManager pm = new CCJSqlParserManager();
+        CreateIndex createIndex = null;
+        try {
+            createIndex = (CreateIndex) pm.parse(new StringReader(createIndexSql));
+        } catch (Exception e) {
             try {
                 throw new DBError("You have an error in your SQL syntax;");
             } catch (DBError dbError1) {
                 dbError1.printStackTrace();
             }
-            return;
         }
-        TablePersistence.dropTable(drop.getName().getName());
+        String indexName = createIndex.getIndex().getName();
+        List<String> columnList = createIndex.getIndex().getColumnsNames();
+        Table table = Table.getTableByName(createIndex.getTable().getName());
+        TableData data = TableData.getDataByName(table.getName());
+        int position = -1;
+        for (int i = 0; i < table.getColumns().size(); i++) {
+            if (table.getColumns().get(i).getName().toUpperCase().equals(columnList.get(0).toUpperCase())) {
+                position = i;
+                break;
+            }
+        }
+        if (position == -1) {
+            try {
+                throw new DBError("column", columnList.get(0), null);
+            } catch (DBError dbError) {
+                dbError.printStackTrace();
+                return;
+            }
+        }
+        Set<IndexNode> nodeTree = new TreeSet<>();
+        if (position > -1) {
+            for (int i = 0; i < data.getRows().size(); i++) {
+                IndexNode indexNode = new IndexNode();
+                indexNode.setData(data.getRows().get(i).get(position));
+                indexNode.setIdx(i);
+                nodeTree.add(indexNode);
+            }
+            if (bool) {
+                IndexPersistence.createIndex(nodeTree, columnList.get(0) + "-" + table.getName() + "-" + indexName);
+                ArrayList<String[]> resRow = new ArrayList<>();
+                String[] title = {"Index", "Data"};
+                for (IndexNode in : nodeTree) {
+                    String[] temp = {String.valueOf(in.getIdx()), in.getData()};
+                    resRow.add(temp);
+                }
+                ResultView resultView = new ResultView(title);
+                resRow.forEach(resultView::addRow);
+                System.out.println(resultView);
+            }else {
+                IndexPersistence.persistenceIndex(nodeTree, columnList.get(0) + "-" + table.getName() + "-" + indexName);
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        System.out.println("Welcome to the MySQL monitor.");
+        Scanner in = new Scanner(System.in);
+        String sql;
+        SqlParse parse = new SqlParse();
+        while (!(sql = in.nextLine()).equals("exit")) {
+            parse.setSqlString(sql);
+            try {
+                parse.parse();
+            } catch (DBError dbError) {
+                dbError.printStackTrace();
+            }
+        }
+        System.out.println("Bye.");
     }
 }

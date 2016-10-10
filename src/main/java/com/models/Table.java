@@ -3,11 +3,9 @@ package com.models;
 import com.util.Constants;
 import com.util.FileManager;
 
-import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.StringJoiner;
 
 public class Table implements Serializable {
     private String name;
