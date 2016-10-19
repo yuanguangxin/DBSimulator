@@ -15,6 +15,7 @@ public class UserPersistence {
 
     public static void persistenceUser(User user) {
         FileManager.writeObject(Limit.class, user.getPermission(), Constants.USER_HOME + "//" + user.getUsername().toUpperCase() + "-" + user.getPassword() + ".csv", false);
+        System.out.println("Query OK.");
     }
 
     public static User isUser(User user) {
@@ -45,6 +46,7 @@ public class UserPersistence {
         File file = new File(Constants.USER_HOME + "//" + user.getUsername().toUpperCase() + "-" + user.getPassword() + ".csv");
         if (file.exists()) {
             file.delete();
+            System.out.println("Query OK.");
         }
     }
 
