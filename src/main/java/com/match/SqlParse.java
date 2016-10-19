@@ -47,18 +47,17 @@ public class SqlParse {
             case "alter":
                 sqlTranslate.getTableByAlter(sqlString);
                 break;
-            case "desc":
-                break;
             case "drop":
-                sqlTranslate.drop(sqlString);
+                if (afterArray[1].toLowerCase().equals("user")){
+                    sqlTranslate.dropUser(sqlString);
+                }else {
+                    sqlTranslate.drop(sqlString);
+                }
                 break;
-            case "source":
-                break;
-            case "truncate":
-                break;
-            case "show":
-                break;
-            case "check":
+            case "grant":
+                sqlTranslate.grantUser(sqlString);
+            case "revoke":
+                sqlTranslate.revokeUser(sqlString);
                 break;
             default:
                 throw new DBError(afterArray, 0, "unknown");

@@ -2,17 +2,22 @@ package com.translate;
 
 import com.match.SqlParse;
 import com.models.*;
+import com.models.Column;
+import com.models.Table;
 import com.persistence.DataPersistence;
 import com.persistence.IndexPersistence;
 import com.persistence.TablePersistence;
+import com.persistence.UserPersistence;
 import com.sun.org.apache.xpath.internal.operations.Bool;
 import com.util.DBError;
+import com.util.Descartes;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.BinaryExpression;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.operators.conditional.*;
 import net.sf.jsqlparser.expression.operators.relational.*;
 import net.sf.jsqlparser.parser.CCJSqlParserManager;
+import net.sf.jsqlparser.schema.*;
 import net.sf.jsqlparser.statement.alter.Alter;
 import net.sf.jsqlparser.statement.alter.AlterExpression;
 import net.sf.jsqlparser.statement.create.index.CreateIndex;
@@ -25,11 +30,15 @@ import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
 import net.sf.jsqlparser.statement.update.Update;
 import net.sf.jsqlparser.util.TablesNamesFinder;
+import sun.security.provider.PolicyParser;
+import sun.tools.tree.EqualExpression;
 
 import java.io.StringReader;
 import java.util.*;
 
 public class SqlTranslate {
+    private static User user = new User();
+
     public Table getTableByCreateTable(String createTableSql) {
         CCJSqlParserManager pm = new CCJSqlParserManager();
         Table table = new Table();
@@ -92,6 +101,14 @@ public class SqlTranslate {
             return null;
         }
         TableData tableData = TableData.getDataByName(insert.getTable().getName());
+        if (!UserPersistence.isAllow(user, tableData.getTable().getName(), "insert")) {
+            try {
+                throw new DBError(user.getUsername(), true);
+            } catch (DBError dbError) {
+                dbError.printStackTrace();
+                return null;
+            }
+        }
         ExpressionList expressionList = (ExpressionList) insert.getItemsList();
         List<String> row = new ArrayList<>();
         for (int i = 0; i < expressionList.getExpressions().size(); i++) {
@@ -127,6 +144,7 @@ public class SqlTranslate {
 
     private List<Integer> doExpression(TableData tableData, Expression exp) {
         if (exp == null) return null;
+        boolean isIndex = false;
         if (exp instanceof AndExpression) {
             AndExpression expression = (AndExpression) exp;
             Expression left = expression.getLeftExpression();
@@ -143,16 +161,16 @@ public class SqlTranslate {
                 int t = partTwo.get(i);
                 partTwoCopy.add(t);
             }
+            List<Integer> rr = new ArrayList<>();
             for (int i = 0; i < partOne.size(); i++) {
                 for (int j = 0; j < partTwo.size(); j++) {
                     if (partOne.get(i) == partTwo.get(j)) {
+                        rr.add(partOne.get(i));
                         break;
-                    } else {
-                        partOne.remove(i);
                     }
                 }
             }
-            return partOne;
+            return rr;
         } else if (exp instanceof OrExpression) {
             OrExpression expression = (OrExpression) exp;
             Expression left = expression.getLeftExpression();
@@ -172,6 +190,50 @@ public class SqlTranslate {
             partOne.removeAll(partTwo);
             partOne.addAll(partTwo);
             return partOne;
+        } else if (exp instanceof EqualsTo && ((EqualsTo) exp).getRightExpression() instanceof net.sf.jsqlparser.schema.Column) {
+            long begin = System.currentTimeMillis();
+            List<Integer> result = new ArrayList<>();
+            EqualsTo equalsTo = (EqualsTo) exp;
+            String left = equalsTo.getLeftExpression().toString();
+            String right = equalsTo.getRightExpression().toString();
+            Table table = tableData.getTable();
+            int leftIndex = -1;
+            int rightIndex = -1;
+            if ((left.toUpperCase().indexOf(".") != -1 && IndexPersistence.isExists(left.toUpperCase().split("\\.")[1] + "-" + left.toUpperCase().split("\\.")[0])) || (right.toUpperCase().indexOf(".") != -1 && IndexPersistence.isExists(right.toUpperCase().split("\\.")[1] + "-" + right.toUpperCase().split("\\.")[0]))) {
+                long end = System.currentTimeMillis() - begin;
+                System.out.println("使用索引完成连接操作耗时：" + end + "毫秒");
+            }
+            for (int i = 0; i < table.getColumns().size(); i++) {
+                if (table.getColumns().get(i).getName().toUpperCase().equals(left.toUpperCase())) {
+                    leftIndex = i;
+                    continue;
+                } else if (table.getColumns().get(i).getName().toUpperCase().equals(right.toUpperCase())) {
+                    rightIndex = i;
+                    continue;
+                }
+            }
+            if (leftIndex == -1) {
+                try {
+                    throw new DBError("column", left, null);
+                } catch (DBError dbError) {
+                    dbError.printStackTrace();
+                }
+            } else if (rightIndex == -1) {
+                try {
+                    throw new DBError("column", right, null);
+                } catch (DBError dbError) {
+                    dbError.printStackTrace();
+                }
+            } else {
+                for (int i = 0; i < tableData.getRows().size(); i++) {
+                    if (tableData.getRows().get(i).get(leftIndex).equals(tableData.getRows().get(i).get(rightIndex))) {
+                        result.add(i);
+                    }
+                }
+            }
+            long end = System.currentTimeMillis() - begin;
+            System.out.println("普通查询完成连接操作耗时：" + end + "毫秒");
+            return result;
         }
         BinaryExpression e = (BinaryExpression) exp;
         String l = e.getLeftExpression().toString();
@@ -180,6 +242,16 @@ public class SqlTranslate {
         int index = -1;
         List<List<String>> rows;
         List<Integer> delIndex;
+        List<IndexNode> nodes;
+
+        String index_name = l.toUpperCase() + "-" + tableData.getTable().getName().toUpperCase();
+        long begin = System.currentTimeMillis();
+        if (IndexPersistence.isExists(index_name) || (l.toUpperCase().indexOf(".") != -1 && IndexPersistence.isExists(l.toUpperCase().split("\\.")[1] + "-" + l.toUpperCase().split("\\.")[0]))) {
+            nodes = IndexNode.getIndexByName(index_name);
+            delIndex = getIndexByIndex(nodes, r, exp);
+            long end = System.currentTimeMillis() - begin;
+            System.out.println("使用索引完成选择操作耗时：" + end + "毫秒");
+        }
         for (int i = 0; i < table.getColumns().size(); i++) {
             if (l.toUpperCase().equals(table.getColumns().get(i).getName().toUpperCase())) {
                 index = i;
@@ -198,6 +270,8 @@ public class SqlTranslate {
         }
 
         delIndex = getIndex(index, rows, r, exp);
+        long end = System.currentTimeMillis() - begin;
+        System.out.println("普通查询完成选择操作耗时：" + end + "毫秒");
         return delIndex;
     }
 
@@ -250,6 +324,55 @@ public class SqlTranslate {
         return index;
     }
 
+    private List<Integer> getIndexByIndex(List<IndexNode> rows, String value, Expression exp) {
+        List<Integer> index = new ArrayList<>();
+        if (exp instanceof EqualsTo) {
+            for (int i = 0; i < rows.size(); i++) {
+                if (rows.get(i).getData().equals(value)) {
+                    index.add(rows.get(i).getIdx());
+                }
+            }
+        } else if (exp instanceof MinorThan) {
+            for (int i = 0; i < rows.size(); i++) {
+                if (rows.get(i).getData().compareTo(value) < 0) {
+                    index.add(rows.get(i).getIdx());
+                }
+            }
+        } else if (exp instanceof GreaterThan) {
+            for (int i = 0; i < rows.size(); i++) {
+                if (rows.get(i).getData().compareTo(value) > 0) {
+                    index.add(rows.get(i).getIdx());
+                }
+            }
+        } else if (exp instanceof GreaterThanEquals) {
+            for (int i = 0; i < rows.size(); i++) {
+                if (rows.get(i).getData().compareTo(value) >= 0) {
+                    index.add(rows.get(i).getIdx());
+                }
+            }
+        } else if (exp instanceof MinorThanEquals) {
+            for (int i = 0; i < rows.size(); i++) {
+                if (rows.get(i).getData().compareTo(value) <= 0) {
+                    index.add(rows.get(i).getIdx());
+                }
+            }
+        } else if (exp instanceof NotEqualsTo) {
+            for (int i = 0; i < rows.size(); i++) {
+                if (!rows.get(i).getData().equals(value)) {
+                    index.add(rows.get(i).getIdx());
+                }
+            }
+        } else {
+            try {
+                throw new DBError(exp.toString(), 1);
+            } catch (DBError dbError) {
+                dbError.printStackTrace();
+                return null;
+            }
+        }
+        return index;
+    }
+
     public TableData getTableDataByDelete(String deleteSql) {
         CCJSqlParserManager pm = new CCJSqlParserManager();
         Delete delete = null;
@@ -263,6 +386,14 @@ public class SqlTranslate {
             }
         }
         TableData tableData = TableData.getDataByName(delete.getTable().getName());
+        if (!UserPersistence.isAllow(user, tableData.getTable().getName(), "delete")) {
+            try {
+                throw new DBError(user.getUsername(), true);
+            } catch (DBError dbError) {
+                dbError.printStackTrace();
+                return null;
+            }
+        }
         if (delete.getWhere() == null) {
             DataPersistence.dropData(delete.getTable().getName());
             return null;
@@ -359,11 +490,50 @@ public class SqlTranslate {
         PlainSelect ps = (PlainSelect) select.getSelectBody();
         TablesNamesFinder tablesNamesFinder = new TablesNamesFinder();
         List<String> tables = tablesNamesFinder.getTableList(select);
-        TableData tableData = TableData.getDataByName(tables.get(0));
-        List<Integer> result = doExpression(tableData, ps.getWhere());
-        List<List<String>> lists = tableData.getRows();
+        for (int i = 0; i < tables.size(); i++) {
+            if (!UserPersistence.isAllow(user, tables.get(i), "select")) {
+                try {
+                    throw new DBError(user.getUsername(), true);
+                } catch (DBError dbError) {
+                    dbError.printStackTrace();
+                    return null;
+                }
+            }
+        }
+        TableData tableData = null;
+        List<Integer> result = null;
+        List<List<String>> lists = null;
+        if (tables.size() == 1) {
+            tableData = TableData.getDataByName(tables.get(0));
+            result = doExpression(tableData, ps.getWhere());
+            lists = tableData.getRows();
+        } else {
+            List<Column> columns = new ArrayList<>();
+            List<List<List<String>>> dview = new ArrayList<>();
+            for (int i = 0; i < tables.size(); i++) {
+                Table t = Table.getTableByName(tables.get(i));
+                for (int j = 0; j < t.getColumns().size(); j++) {
+                    t.getColumns().get(j).setName(t.getName().toLowerCase() + "." + t.getColumns().get(j).getName());
+                }
+                columns.addAll(t.getColumns());
+                TableData td = TableData.getDataByName(tables.get(i));
+                dview.add(td.getRows());
+            }
+            List<List<String>> dresult = Descartes.calculate(dview);
+            Table tab = new Table();
+            tab.setColumns(columns);
+            tab.setName("result");
+            tableData = new TableData(tab);
+            tableData.setRows(dresult);
+            TablePersistence.persistenceTable(tab);
+            DataPersistence.persistenceData(tableData);
+            result = doExpression(tableData, ps.getWhere());
+            lists = tableData.getRows();
+        }
+
+
         String[] titles;
-        int[] n = null;
+        int[] n;
         if (ps.getSelectItems().size() == 1 && ps.getSelectItems().get(0).toString().equals("*")) {
             titles = new String[tableData.getTable().getColumns().size()];
             n = new int[tableData.getTable().getColumns().size()];
@@ -418,6 +588,14 @@ public class SqlTranslate {
         }
         AlterExpression ae = alter.getAlterExpressions().get(0);
         Table table = Table.getTableByName(alter.getTable().getName());
+        if (!UserPersistence.isAllow(user, table.getName(), "alter")) {
+            try {
+                throw new DBError(user.getUsername(), true);
+            } catch (DBError dbError) {
+                dbError.printStackTrace();
+                return null;
+            }
+        }
         TableData tableData = TableData.getDataByName(alter.getTable().getName());
         List<Column> columns = table.getColumns();
         Column column = new Column();
@@ -509,6 +687,14 @@ public class SqlTranslate {
             return;
         }
         if (drop.getType().equals("table")) {
+            if (!UserPersistence.isAllow(user, drop.getName().getName(), "drop")) {
+                try {
+                    throw new DBError(user.getUsername(), true);
+                } catch (DBError dbError) {
+                    dbError.printStackTrace();
+                    return;
+                }
+            }
             TablePersistence.dropTable(drop.getName().getName());
         } else {
             System.out.println(drop.getParameters());
@@ -546,7 +732,7 @@ public class SqlTranslate {
                 return;
             }
         }
-        Set<IndexNode> nodeTree = new TreeSet<>();
+        List<IndexNode> nodeTree = new ArrayList<>();
         if (position > -1) {
             for (int i = 0; i < data.getRows().size(); i++) {
                 IndexNode indexNode = new IndexNode();
@@ -565,25 +751,115 @@ public class SqlTranslate {
                 ResultView resultView = new ResultView(title);
                 resRow.forEach(resultView::addRow);
                 System.out.println(resultView);
-            }else {
+            } else {
                 IndexPersistence.persistenceIndex(nodeTree, columnList.get(0) + "-" + table.getName() + "-" + indexName);
             }
         }
     }
 
-    public static void main(String[] args) {
-        System.out.println("Welcome to the MySQL monitor.");
-        Scanner in = new Scanner(System.in);
-        String sql;
-        SqlParse parse = new SqlParse();
-        while (!(sql = in.nextLine()).equals("exit")) {
-            parse.setSqlString(sql);
+    public void grantUser(String grantSql) {
+//        grantSql = "grant select on pp to “yuanguangxin” identified by “123456” with grant option";
+        String[] splits = grantSql.split(" ");
+        String op = splits[1];
+        String table;
+        String username;
+        String password;
+        if (op.equals("all")) {
+            op = "*";
+            table = splits[4];
+            username = splits[6].substring(1, splits[6].length() - 1);
+            password = splits[9].substring(1, splits[9].length() - 1);
+        } else {
+            table = splits[3];
+            username = splits[5].substring(1, splits[5].length() - 1);
+            password = splits[8].substring(1, splits[8].length() - 1);
+        }
+        User user = new User();
+        List<Limit> limits = new ArrayList<>();
+        user.setUsername(username);
+        user.setPassword(password);
+        Limit limit = new Limit();
+        limit.setTable(table);
+        limit.setOperator(op);
+        limits.add(limit);
+        user.setPermission(limits);
+        UserPersistence.persistenceUser(user);
+    }
+
+    public void revokeUser(String revokeSql) {
+//        revokeSql = "revoke create on *.* from 'yuanguangxin'";
+        String[] splits = revokeSql.split(" ");
+        String tableName = splits[3];
+        String username = splits[5].substring(1, splits[5].length() - 1);
+        System.out.println(username);
+        User user = UserPersistence.getUserByUsername(username);
+        if (user == null) {
             try {
-                parse.parse();
+                throw new DBError();
+            } catch (DBError dbError) {
+                dbError.printStackTrace();
+                return;
+            }
+        } else {
+            List<Limit> list = user.getPermission();
+            if (tableName.equals("*.*")) {
+                list.removeAll(list);
+            } else {
+                for (int i = 0; i < list.size(); i++) {
+                    if (list.get(i).getTable().toUpperCase().equals(tableName.toUpperCase())) {
+                        list.remove(i);
+                        break;
+                    }
+                }
+            }
+            UserPersistence.persistenceUser(user);
+        }
+    }
+
+    public void dropUser(String dropUser) {
+//        dropUser = "drop user 'yuanguangxin'";
+        String username = dropUser.split(" ")[2].substring(1, dropUser.split(" ")[2].length() - 1);
+        User user = UserPersistence.getUserByUsername(username);
+        if (user == null) {
+            try {
+                throw new DBError();
+            } catch (DBError dbError) {
+                dbError.printStackTrace();
+                return;
+            }
+        } else {
+            UserPersistence.dropUser(user);
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner in = new Scanner(System.in);
+        System.out.println("Input Username");
+        String username = in.nextLine();
+        System.out.println("Input Password");
+        String password = in.nextLine();
+        user.setUsername(username);
+        user.setPassword(password);
+        user = UserPersistence.isUser(user);
+        if (user != null) {
+            System.out.println("Welcome to the MySQL monitor.");
+            String sql;
+            SqlParse parse = new SqlParse();
+            while (!(sql = in.nextLine()).equals("exit")) {
+                parse.setSqlString(sql);
+                try {
+                    parse.parse();
+                } catch (DBError dbError) {
+                    dbError.printStackTrace();
+                }
+            }
+            System.out.println("Bye.");
+        } else {
+            try {
+                throw new DBError(username, false);
             } catch (DBError dbError) {
                 dbError.printStackTrace();
             }
         }
-        System.out.println("Bye.");
     }
 }

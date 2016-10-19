@@ -39,11 +39,7 @@ public class FileManager {
             }
             while (it.hasNext()) {
                 String[] row = it.next();
-//                for(int i=0;i<row.length;i++){
-//                    System.out.print(row[i]+" ");
-//                }
                 list.add(row);
-//                System.out.println();
             }
         } catch (Exception e) {
 

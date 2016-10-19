@@ -1,8 +1,13 @@
 package com.models;
 
+import com.persistence.IndexPersistence;
+import com.util.Constants;
+import com.util.FileManager;
 import com.util.StringCompare;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 public class IndexNode implements Comparable,Serializable {
     private String data;
@@ -37,5 +42,17 @@ public class IndexNode implements Comparable,Serializable {
                 "data='" + data + '\'' +
                 ", idx=" + idx +
                 '}';
+    }
+
+    public static List<IndexNode> getIndexByName(String name) {
+        List<String[]> list = FileManager.readCSVFile(Constants.INDEX_HOME + "//" + IndexPersistence.getCompleteName(name),false);
+        List<IndexNode> nodeTree = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            IndexNode indexNode = new IndexNode();
+            indexNode.setData(list.get(i)[0]);
+            indexNode.setIdx(Integer.parseInt(list.get(i)[1]));
+            nodeTree.add(indexNode);
+        }
+        return nodeTree;
     }
 }
