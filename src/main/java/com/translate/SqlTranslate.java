@@ -14,6 +14,7 @@ import com.util.Descartes;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.BinaryExpression;
 import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Parenthesis;
 import net.sf.jsqlparser.expression.operators.conditional.*;
 import net.sf.jsqlparser.expression.operators.relational.*;
 import net.sf.jsqlparser.parser.CCJSqlParserManager;
@@ -530,8 +531,6 @@ public class SqlTranslate {
             result = doExpression(tableData, ps.getWhere());
             lists = tableData.getRows();
         }
-
-
         String[] titles;
         int[] n;
         if (ps.getSelectItems().size() == 1 && ps.getSelectItems().get(0).toString().equals("*")) {
@@ -758,7 +757,7 @@ public class SqlTranslate {
     }
 
     public void grantUser(String grantSql) {
-//        grantSql = "grant select on pp to “yuanguangxin” identified by “123456” with grant option";
+//        grantSql = "grant select on person to “wuhongyu” identified by “123456” with grant option";
         String[] splits = grantSql.split(" ");
         String op = splits[1];
         String table;
@@ -783,12 +782,14 @@ public class SqlTranslate {
         limit.setOperator(op);
         limits.add(limit);
         user.setPermission(limits);
+        System.out.println(user);
         UserPersistence.persistenceUser(user);
     }
 
     public void revokeUser(String revokeSql) {
 //        revokeSql = "revoke create on *.* from 'yuanguangxin'";
         String[] splits = revokeSql.split(" ");
+        String op = splits[1];
         String tableName = splits[3];
         String username = splits[5].substring(1, splits[5].length() - 1);
         System.out.println(username);
@@ -807,14 +808,20 @@ public class SqlTranslate {
             } else {
                 for (int i = 0; i < list.size(); i++) {
                     if (list.get(i).getTable().toUpperCase().equals(tableName.toUpperCase())) {
-                        list.remove(i);
-                        break;
+                        List<String> ops = new ArrayList<>();
+                        for (int j = 0; j < list.get(i).getOperator().split(",").length; j++) {
+                            ops.add(list.get(i).getOperator().split(",")[j]);
+                        }
+                        ops.remove(op);
                     }
+                    list.remove(i);
+                    break;
                 }
             }
-            UserPersistence.persistenceUser(user);
         }
-    }
+        UserPersistence.persistenceUser(user);
+
+}
 
     public void dropUser(String dropUser) {
 //        dropUser = "drop user 'yuanguangxin'";

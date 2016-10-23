@@ -56,6 +56,7 @@ public class SqlParse {
                 break;
             case "grant":
                 sqlTranslate.grantUser(sqlString);
+                break;
             case "revoke":
                 sqlTranslate.revokeUser(sqlString);
                 break;
