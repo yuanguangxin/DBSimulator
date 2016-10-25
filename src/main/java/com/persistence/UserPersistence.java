@@ -49,8 +49,8 @@ public class UserPersistence {
     public static boolean isAllow(User user, String tableName, String op) {
         List<List<String>> lists = user.getPermission();
         for (int i = 0;i<lists.size();i++){
-            if (lists.get(i).get(0).toUpperCase().equals(tableName.toUpperCase())||lists.get(i).get(0).toUpperCase().equals("*.*")){
-                if(lists.get(i).get(1).toUpperCase().equals(op.toUpperCase())||lists.get(i).get(1).toUpperCase().equals("*")){
+            if (lists.get(i).get(0).toUpperCase().equals(tableName.toUpperCase())||lists.get(i).get(0).toUpperCase().equals("*")){
+                if(lists.get(i).get(1).toUpperCase().equals(op.toUpperCase())||lists.get(i).get(1).toUpperCase().equals("*.*")){
                     return true;
                 }
             }

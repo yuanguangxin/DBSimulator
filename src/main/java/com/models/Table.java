@@ -60,4 +60,15 @@ public class Table implements Serializable {
         table.setColumns(columns);
         return table;
     }
+
+    public boolean isPK(String columnName){
+        for (int i=0;i<columns.size();i++){
+            if (columnName.toUpperCase().equals(columns.get(i).getName().toUpperCase())){
+                if(columns.get(i).isPrimaryKey()){
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 }

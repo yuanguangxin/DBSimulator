@@ -191,7 +191,7 @@ public class SqlTranslate {
             partOne.removeAll(partTwo);
             partOne.addAll(partTwo);
             return partOne;
-        } else if (exp instanceof EqualsTo && ((EqualsTo) exp).getRightExpression() instanceof net.sf.jsqlparser.schema.Column) {
+        } else if (exp instanceof EqualsTo && ((EqualsTo) exp).getRightExpression() instanceof net.sf.jsqlparser.schema.Column && ((EqualsTo) exp).getRightExpression().toString().indexOf(".") != -1) {
             long begin = System.currentTimeMillis();
             List<Integer> result = new ArrayList<>();
             EqualsTo equalsTo = (EqualsTo) exp;
@@ -284,6 +284,7 @@ public class SqlTranslate {
                     index.add(i);
                 }
             }
+            System.out.println(index);
         } else if (exp instanceof MinorThan) {
             for (int i = 0; i < rows.size(); i++) {
                 if (rows.get(i).get(ind).compareTo(value) < 0) {
@@ -733,12 +734,38 @@ public class SqlTranslate {
         }
         List<IndexNode> nodeTree = new ArrayList<>();
         if (position > -1) {
-            for (int i = 0; i < data.getRows().size(); i++) {
-                IndexNode indexNode = new IndexNode();
-                indexNode.setData(data.getRows().get(i).get(position));
-                indexNode.setIdx(i);
-                nodeTree.add(indexNode);
+            if (table.isPK(columnList.get(0))) {
+                for (int i = 0; i < data.getRows().size(); ) {
+                    System.out.println("循环" + i);
+                    IndexNode indexNode = new IndexNode();
+                    String dat = "";
+                    indexNode.setIdx(i);
+                    if ((i + 5) >= data.getRows().size()) {
+                        for (int j = 0; j < data.getRows().size() - i; j++) {
+                            dat += data.getRows().get(i + j).get(position) + ",";
+                        }
+                        indexNode.setData(dat);
+                        nodeTree.add(indexNode);
+                        break;
+                    } else {
+                        for (int j = 0; j < 5; j++) {
+                            dat += data.getRows().get(i + j).get(position) + ",";
+                        }
+                        i += 5;
+                    }
+                    indexNode.setData(dat);
+                    nodeTree.add(indexNode);
+                }
+            } else {
+                for (int i = 0; i < data.getRows().size(); i++) {
+                    IndexNode indexNode = new IndexNode();
+                    indexNode.setData(data.getRows().get(i).get(position));
+                    indexNode.setIdx(i);
+                    nodeTree.add(indexNode);
+                    Collections.sort(nodeTree);
+                }
             }
+            System.out.println(nodeTree);
             if (bool) {
                 IndexPersistence.createIndex(nodeTree, columnList.get(0) + "-" + table.getName() + "-" + indexName);
                 ArrayList<String[]> resRow = new ArrayList<>();
@@ -811,7 +838,7 @@ public class SqlTranslate {
         } else {
             List<List<String>> lists = user.getPermission();
             if (tableName.equals("*.*")) {
-                for (int i = lists.size()-1;i>=0;i--) {
+                for (int i = lists.size() - 1; i >= 0; i--) {
                     for (int j = 0; j < ops.size(); j++) {
                         if (lists.get(i).get(1).toUpperCase().equals(ops.get(j).toUpperCase())) {
                             lists.remove(i);
@@ -819,7 +846,7 @@ public class SqlTranslate {
                     }
                 }
             } else {
-                for (int i = lists.size()-1;i>=0;i--) {
+                for (int i = lists.size() - 1; i >= 0; i--) {
                     for (int j = 0; j < ops.size(); j++) {
                         if (lists.get(i).get(1).toUpperCase().equals(ops.get(j).toUpperCase()) && lists.get(i).get(0).toUpperCase().equals(tableName.toUpperCase())) {
                             lists.remove(i);
