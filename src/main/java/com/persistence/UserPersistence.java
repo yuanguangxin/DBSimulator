@@ -4,12 +4,9 @@ import com.models.Limit;
 import com.models.User;
 import com.util.Constants;
 import com.util.FileManager;
-import javafx.scene.control.Tab;
 
 import java.io.File;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class UserPersistence {
 
