@@ -11,7 +11,7 @@ import java.util.Map;
 public class User {
     private String username;
     private String password;
-    private List<Limit> permission;
+    private List<List<String>> permission;
 
     public User() {
         permission = new ArrayList<>();
@@ -33,36 +33,13 @@ public class User {
         this.password = password;
     }
 
-    public List<Limit> getPermission() {
+
+    public List<List<String>> getPermission() {
         return permission;
     }
 
-    public void setPermission(List<Limit> permission) {
+    public void setPermission(List<List<String>> permission) {
         this.permission = permission;
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("{");
-        builder.append("\"username\":").append("\"").append(username).append("\",");
-        builder.append("\"password\":").append("\"").append(password).append("\",");
-        if (permission != null) {
-            builder.append("\"permission\":").append("{");
-            for (Limit key : permission) {
-                builder.append("\"").append(key.getTable()).append("\":\"").append(key.getOperator());
-                builder.append("\",");
-            }
-            if (builder.charAt(builder.length() - 1) == ',') {
-                builder.delete(builder.length() - 1, builder.length());
-            }
-            builder.append("}");
-        }
-        if (builder.charAt(builder.length() - 1) == ',') {
-            builder.delete(builder.length() - 1, builder.length());
-        }
-        builder.append("}");
-        return builder.toString();
     }
 
     @Override
@@ -74,11 +51,11 @@ public class User {
 
     public static User getUserByUsername(User user) {
         List<String[]> list = FileManager.readCSVFile(Constants.USER_HOME + "//" + user.getUsername().toUpperCase() + "-" + user.getPassword() + ".csv", false);
-        List<Limit> limits = new ArrayList<>();
+        List<List<String>> limits = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
-            Limit limit = new Limit();
-            limit.setTable(list.get(i)[1]);
-            limit.setOperator(list.get(i)[0]);
+            List<String> limit = new ArrayList<>();
+            limit.add(list.get(i)[0]);
+            limit.add(list.get(i)[1]);
             limits.add(limit);
         }
         user.setPermission(limits);

@@ -759,41 +759,48 @@ public class SqlTranslate {
     public void grantUser(String grantSql) {
 //        grantSql = "grant select on person to “wuhongyu” identified by “123456” with grant option";
         String[] splits = grantSql.split(" ");
-        String op = splits[1];
-        String table;
+        List<String> ops = new ArrayList<>();
+        Collections.addAll(ops, splits[1].split(","));
+        List<String> tables = new ArrayList<>();
         String username;
         String password;
-        if (op.equals("all")) {
-            op = "*";
-            table = splits[4];
+        if (ops.toString().toUpperCase().equals("ALL")) {
+            ops.remove(0);
+            ops.add("*");
+            Collections.addAll(tables, splits[4].split(","));
             username = splits[6].substring(1, splits[6].length() - 1);
             password = splits[9].substring(1, splits[9].length() - 1);
         } else {
-            table = splits[3];
+            Collections.addAll(tables, splits[3].split(","));
             username = splits[5].substring(1, splits[5].length() - 1);
             password = splits[8].substring(1, splits[8].length() - 1);
         }
         User user = new User();
-        List<Limit> limits = new ArrayList<>();
         user.setUsername(username);
         user.setPassword(password);
-        Limit limit = new Limit();
-        limit.setTable(table);
-        limit.setOperator(op);
-        limits.add(limit);
-        user.setPermission(limits);
-        System.out.println(user);
+        List<List<String>> lists = new ArrayList<>();
+        if (UserPersistence.isUser(user) != null) {
+            for (int i = 0; i < tables.size(); i++) {
+                for (int j = 0; j < ops.size(); j++) {
+                    List<String> list = new ArrayList<>();
+                    list.add(tables.get(i));
+                    list.add(ops.get(j));
+                    lists.add(list);
+                }
+            }
+        }
+        user.setPermission(lists);
         UserPersistence.persistenceUser(user);
     }
 
     public void revokeUser(String revokeSql) {
 //        revokeSql = "revoke create on *.* from 'yuanguangxin'";
         String[] splits = revokeSql.split(" ");
-        String op = splits[1];
+        List<String> ops = new ArrayList<>();
+        Collections.addAll(ops, splits[1].split(","));
         String tableName = splits[3];
         String username = splits[5].substring(1, splits[5].length() - 1);
-        System.out.println(username);
-        User user = UserPersistence.getUserByUsername(username);
+        User user = User.getUserByUsername(UserPersistence.getUserByUsername(username));
         if (user == null) {
             try {
                 throw new DBError();
@@ -802,26 +809,27 @@ public class SqlTranslate {
                 return;
             }
         } else {
-            List<Limit> list = user.getPermission();
+            List<List<String>> lists = user.getPermission();
             if (tableName.equals("*.*")) {
-                list.removeAll(list);
-            } else {
-                for (int i = 0; i < list.size(); i++) {
-                    if (list.get(i).getTable().toUpperCase().equals(tableName.toUpperCase())) {
-                        List<String> ops = new ArrayList<>();
-                        for (int j = 0; j < list.get(i).getOperator().split(",").length; j++) {
-                            ops.add(list.get(i).getOperator().split(",")[j]);
+                for (int i = lists.size()-1;i>=0;i--) {
+                    for (int j = 0; j < ops.size(); j++) {
+                        if (lists.get(i).get(1).toUpperCase().equals(ops.get(j).toUpperCase())) {
+                            lists.remove(i);
                         }
-                        ops.remove(op);
                     }
-                    list.remove(i);
-                    break;
+                }
+            } else {
+                for (int i = lists.size()-1;i>=0;i--) {
+                    for (int j = 0; j < ops.size(); j++) {
+                        if (lists.get(i).get(1).toUpperCase().equals(ops.get(j).toUpperCase()) && lists.get(i).get(0).toUpperCase().equals(tableName.toUpperCase())) {
+                            lists.remove(i);
+                        }
+                    }
                 }
             }
         }
         UserPersistence.persistenceUser(user);
-
-}
+    }
 
     public void dropUser(String dropUser) {
 //        dropUser = "drop user 'yuanguangxin'";

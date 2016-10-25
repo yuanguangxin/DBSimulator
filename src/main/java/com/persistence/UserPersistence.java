@@ -1,6 +1,5 @@
 package com.persistence;
 
-import com.models.Limit;
 import com.models.User;
 import com.util.Constants;
 import com.util.FileManager;
@@ -11,7 +10,7 @@ import java.util.List;
 public class UserPersistence {
 
     public static void persistenceUser(User user) {
-        FileManager.writeObject(Limit.class, user.getPermission(), Constants.USER_HOME + "//" + user.getUsername().toUpperCase() + "-" + user.getPassword() + ".csv", false);
+        FileManager.writeObject(String.class, user.getPermission(), Constants.USER_HOME + "//" + user.getUsername().toUpperCase() + "-" + user.getPassword() + ".csv", false);
         System.out.println("Query OK.");
     }
 
@@ -48,10 +47,10 @@ public class UserPersistence {
     }
 
     public static boolean isAllow(User user, String tableName, String op) {
-        List<Limit> list = user.getPermission();
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i).getTable().toUpperCase().equals(tableName.toUpperCase()) || list.get(i).getTable().toUpperCase().equals("*.*")) {
-                if (list.get(i).getOperator().toUpperCase().indexOf(op.toUpperCase()) != -1 || list.get(i).getOperator().toUpperCase().equals("*")) {
+        List<List<String>> lists = user.getPermission();
+        for (int i = 0;i<lists.size();i++){
+            if (lists.get(i).get(0).toUpperCase().equals(tableName.toUpperCase())||lists.get(i).get(0).toUpperCase().equals("*.*")){
+                if(lists.get(i).get(1).toUpperCase().equals(op.toUpperCase())||lists.get(i).get(1).toUpperCase().equals("*")){
                     return true;
                 }
             }
