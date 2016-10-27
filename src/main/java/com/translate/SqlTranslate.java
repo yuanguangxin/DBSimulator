@@ -284,7 +284,6 @@ public class SqlTranslate {
                     index.add(i);
                 }
             }
-            System.out.println(index);
         } else if (exp instanceof MinorThan) {
             for (int i = 0; i < rows.size(); i++) {
                 if (rows.get(i).get(ind).compareTo(value) < 0) {
@@ -736,7 +735,6 @@ public class SqlTranslate {
         if (position > -1) {
             if (table.isPK(columnList.get(0))) {
                 for (int i = 0; i < data.getRows().size(); ) {
-                    System.out.println("循环" + i);
                     IndexNode indexNode = new IndexNode();
                     String dat = "";
                     indexNode.setIdx(i);
@@ -765,7 +763,6 @@ public class SqlTranslate {
                     Collections.sort(nodeTree);
                 }
             }
-            System.out.println(nodeTree);
             if (bool) {
                 IndexPersistence.createIndex(nodeTree, columnList.get(0) + "-" + table.getName() + "-" + indexName);
                 ArrayList<String[]> resRow = new ArrayList<>();
