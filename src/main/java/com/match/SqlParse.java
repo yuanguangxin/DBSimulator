@@ -35,7 +35,7 @@ public class SqlParse {
                 if (afterArray[1].toLowerCase().equals("table")) {
                     sqlTranslate.getTableByCreateTable(sqlString);
                 } else if (afterArray[1].toLowerCase().equals("index")) {
-                    sqlTranslate.executeCreateIndex(sqlString,true);
+                    sqlTranslate.executeCreateIndex(sqlString, true);
                 }
                 break;
             case "delete":
@@ -48,9 +48,9 @@ public class SqlParse {
                 sqlTranslate.getTableByAlter(sqlString);
                 break;
             case "drop":
-                if (afterArray[1].toLowerCase().equals("user")){
+                if (afterArray[1].toLowerCase().equals("user")) {
                     sqlTranslate.dropUser(sqlString);
-                }else {
+                } else {
                     sqlTranslate.drop(sqlString);
                 }
                 break;
