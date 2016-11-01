@@ -1,8 +1,0 @@
-length,name,notNull,primaryKey,type
-0,pp.id,false,true,int
-30,pp.name,false,false,varchar
-0,pp.age,false,false,int
-0,pp.ages,false,false,int
-0,person.id,false,false,int
-255,person.name,false,false,varchar
-30,person.age,false,false,varchar

@@ -1,3 +1,0 @@
-length,name,notNull,primaryKey,type
-0,id,false,false,int
-30,name,false,false,varchar
